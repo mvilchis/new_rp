@@ -1,0 +1,119 @@
+version: '2'
+services:
+  redis:
+    image: redis:alpine
+    ports:
+      - '6379:6379'
+    networks:
+      vpcbr:
+        ipv4_address: 10.5.0.2
+  postgresql:
+    container_name: postgres_container
+
+    image: mvilchis/postgres-rp:v1.0
+    ports:
+      - "5432:5432"
+    environment:
+      - TEMBAPASSWD=supersecret
+    networks:
+      vpcbr:
+        ipv4_address: 10.5.0.3
+    #entrypoint: ["sh", "/var/www/entrypoint.sh"]
+  rapidpro:
+    image: mvilchis/rapidpro:v1.4.28
+    links:
+      - redis
+      - postgresql
+    ports:
+      - '8000:8000'
+    environment:
+      - POSTGRES_PORT_5432_TCP_ADDR=10.5.0.2
+      - REDIS_PORT_6379_TCP_ADDR=10.5.0.3
+      - POSTGRES_PORT_5432_TCP_PORT=5432
+      - REDIS_PORT_6379_TCP_PORT=6379
+      - SEND_MAIL=True
+      - DEBUG=False
+      - EMAIL_HOST_USER=rapidpro@email.com
+      - EMAIL_HOST_PASSWORD=supersecret
+      - DEFAULT_LANGUAGE=es
+      - SEND_WEBHOOKS=True
+      - SECRET_KEY=supersecret
+      - CONTAINER_INIT=start_rapidpro.sh
+      - SEND_MESSAGES=True
+  celery_beat:
+    image: mvilchis/rapidpro:v1.4.28
+    depends_on:
+      - rapidpro
+    ports:
+      - '5555:5555'
+    links:
+      - redis
+      - postgresql
+    environment:
+      - POSTGRES_PORT_5432_TCP_ADDR=10.5.0.2
+      - REDIS_PORT_6379_TCP_ADDR=10.5.0.3
+      - POSTGRES_PORT_5432_TCP_PORT=5432
+      - REDIS_PORT_6379_TCP_PORT=6379
+      - SECRET_KEY=supersecret
+      - CONTAINER_INIT=start_celery.sh
+      - CELERY_BEAT=True
+      - CELERY_WORKERS=8
+      - SEND_MESSAGES=True
+  celery_msgs:
+    image: mvilchis/rapidpro:v1.4.28
+    depends_on:
+      - rapidpro
+    links:
+      - redis
+      - postgresql
+    environment:
+      - POSTGRES_PORT_5432_TCP_ADDR=10.5.0.2
+      - REDIS_PORT_6379_TCP_ADDR=10.5.0.3
+      - POSTGRES_PORT_5432_TCP_PORT=5432
+      - REDIS_PORT_6379_TCP_PORT=6379
+      - SECRET_KEY=supersecret
+      - CONTAINER_INIT=start_celery.sh
+      - CELERY_WORKERS=12
+      - CELERY_QUEUE=msgs
+      - SEND_MESSAGES=True
+  celery_handler:
+    image: mvilchis/rapidpro:v1.4.28
+    depends_on:
+      - rapidpro
+    links:
+      - redis
+      - postgresql
+    environment:
+      - POSTGRES_PORT_5432_TCP_ADDR=10.5.0.2
+      - REDIS_PORT_6379_TCP_ADDR=10.5.0.3
+      - POSTGRES_PORT_5432_TCP_PORT=5432
+      - REDIS_PORT_6379_TCP_PORT=6379
+      - SECRET_KEY=supersecret
+      - CONTAINER_INIT=start_celery.sh
+      - CELERY_WORKERS=8
+      - CELERY_QUEUE=handler
+      - SEND_MESSAGES=True
+  celery_flow:
+    image: mvilchis/rapidpro:v1.4.28
+    depends_on:
+      - rapidpro
+    links:
+      - redis
+      - postgresql
+    environment:
+      - POSTGRES_PORT_5432_TCP_ADDR=10.5.0.2
+      - REDIS_PORT_6379_TCP_ADDR=10.5.0.3
+      - POSTGRES_PORT_5432_TCP_PORT=5432
+      - REDIS_PORT_6379_TCP_PORT=6379
+      - SECRET_KEY=supersecret
+      - CONTAINER_INIT=start_celery.sh
+      - CELERY_WORKERS=6
+      - CELERY_QUEUE=flow
+      - SEND_MESSAGES=True
+networks:
+  vpcbr:
+    driver: bridge
+    ipam:
+     config:
+       - subnet: 10.5.0.0/16
+         gateway: 10.5.0.1
